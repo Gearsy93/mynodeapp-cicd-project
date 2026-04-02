@@ -1,0 +1,23 @@
+let express = require('express');
+let app = express(); // deploy test
+
+app.get('/', function (req, res) {
+    res.json({ 
+        products: [{
+            name: "laptop", 
+            price: 500
+        }, {
+            name: "monitor",
+            price: 100
+        }, {
+            name: "keyboard",
+            price: 30
+        }]
+    });
+    res.end();
+});
+
+app.listen(3101, function () {
+  console.log("app listening on port 3101!");
+});
+

@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: $MICRO_SERVICE
+  namespace: my-micro-service
+spec:
+  selector:
+    matchLabels:
+      app: $MICRO_SERVICE
+  replicas: $REPLICAS
+  template:
+    metadata:
+      labels:
+        app: $MICRO_SERVICE
+    spec:
+      containers:
+        - name: $MICRO_SERVICE
+          image: $IMAGE_NAME:$IMAGE_TAG
+          ports:
+            - containerPort: $SERVICE_PORT

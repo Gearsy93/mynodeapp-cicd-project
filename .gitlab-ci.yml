@@ -1,0 +1,124 @@
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH != "main" && $CI_PIPELINE_SOURCE != "merge_request_event"
+      when: never
+    - when: always
+
+variables:
+  DOCKER_HOST: "tcp://host.docker.internal:2375"
+  DOCKER_TLS_CERTDIR: ""
+
+  DEPLOYMENT_SERVER_HOST: $DEV_DEPLOY_HOST
+  SSH_PRIVATE_KEY: $DEV_SSH_PRIVATE_KEY
+
+stages:
+  - build
+  - deploy
+
+.build:
+  stage: build
+  tags:
+    - any
+  variables:
+    MICRO_SERVICE: ""
+    SERVICE_VERSION: ""
+  before_script:
+    - cd $MICRO_SERVICE
+    - export IMAGE_NAME=$CI_REGISTRY_IMAGE/microservice/$MICRO_SERVICE
+    - export IMAGE_TAG=$SERVICE_VERSION
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $IMAGE_NAME:$IMAGE_TAG .
+    - docker push $IMAGE_NAME:$IMAGE_TAG
+
+build_frontend:
+  extends: .build
+  variables:
+    MICRO_SERVICE: frontend
+    SERVICE_VERSION: "1.3"
+  only:
+    changes:
+      - "frontend/**/*"
+
+build_products:
+  extends: .build
+  variables:
+    MICRO_SERVICE: products
+    SERVICE_VERSION: "1.8"
+  only:
+    changes:
+      - "products/**/*"
+
+build_shopping_cart:
+  extends: .build
+  variables:
+    MICRO_SERVICE: shopping-cart
+    SERVICE_VERSION: "2.1"
+  only:
+    changes:
+      - "shopping-cart/**/*"
+
+.deploy:
+  stage: deploy
+  tags:
+    - any
+  variables:
+    MICRO_SERVICE: ""
+    SERVICE_VERSION: ""
+    APP_PORT: ""
+  before_script:
+    - apk add --no-cache openssh-client
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - cat "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - export IMAGE_NAME=$CI_REGISTRY_IMAGE/microservice/$MICRO_SERVICE
+    - export IMAGE_TAG=$SERVICE_VERSION
+  script:
+    - scp -P 23 -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ./docker-compose.yaml deployer@$DEPLOYMENT_SERVER_HOST:/home/deployer
+    - ssh -p 23 -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa deployer@$DEPLOYMENT_SERVER_HOST "
+      echo '$CI_REGISTRY_PASSWORD' | docker login -u '$CI_REGISTRY_USER' --password-stdin $CI_REGISTRY &&
+
+      export COMPOSE_PROJECT_NAME=$MICRO_SERVICE &&
+      export DC_IMAGE_NAME=$IMAGE_NAME &&
+      export DC_IMAGE_TAG=$IMAGE_TAG &&
+      export DC_APP_PORT=$APP_PORT &&
+
+      docker network create micro_service || true &&
+
+      docker-compose down &&
+      docker-compose up -d"
+
+
+deploy_frontend:
+  extends: .deploy
+  variables:
+    MICRO_SERVICE: frontend
+    SERVICE_VERSION: "1.3"
+    APP_PORT: 3100
+  only:
+    changes:
+      - "frontend/**/*"
+  environment:
+    name: development
+    url: http://$DEPLOYMENT_SERVER_HOST:$APP_PORT
+
+deploy_products:
+  extends: .deploy
+  variables:
+    MICRO_SERVICE: products
+    SERVICE_VERSION: "1.8"
+    APP_PORT: 3101
+  only:
+    changes:
+      - "products/**/*"
+
+deploy_shopping-cart:
+  extends: .deploy
+  variables:
+    MICRO_SERVICE: shopping-cart
+    SERVICE_VERSION: "2.1"
+    APP_PORT: 3102
+  only:
+    changes:
+      - "shopping-cart/**/*"
