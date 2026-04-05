@@ -2,7 +2,7 @@
   "version": 1,
   "rules": [
     {
-      "domain": [
+      "domain_suffix": [
         "10minutemail.com",
         "1337x.to",
         "24.kg",
@@ -994,6 +994,7 @@
         "zerkalo.io",
         "zona.media"
       ],
+      "domain": [],
       "ip_cidr": [
         "1.1.1.1/32",
         "1.179.201.18/32",
